@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FinNLP - NSE Sentiment Analyzer</title>
+
+<style>
+* { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
+
+body {
+    margin: 0;
+    height: 100vh;
+    background: linear-gradient(135deg, #0f172a, #1f2937);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #fff;
+}
+
+.container {
+    width: 520px;
+    background: rgba(255,255,255,0.06);
+    backdrop-filter: blur(14px);
+    border-radius: 18px;
+    padding: 30px;
+    box-shadow: 0 15px 40px rgba(0,0,0,0.5);
+}
+
+h2 { text-align: center; margin-bottom: 20px; }
+
+input, select {
+    width: 100%;
+    padding: 12px;
+    margin-top: 10px;
+    border-radius: 8px;
+    border: none;
+    outline: none;
+    font-size: 15px;
+}
+
+button {
+    width: 100%;
+    margin-top: 15px;
+    padding: 12px;
+    border-radius: 8px;
+    border: none;
+    background: #22c55e;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+button:hover { background: #16a34a; }
+
+#result { margin-top: 25px; }
+
+/* Loader */
+.loader {
+    border: 4px solid rgba(255,255,255,0.2);
+    border-top: 4px solid #22c55e;
+    border-radius: 50%;
+    width: 35px;
+    height: 35px;
+    animation: spin 1s linear infinite;
+    margin: 20px auto;
+}
+@keyframes spin { 100% { transform: rotate(360deg);} }
+
+/* Circular Score */
+.circle {
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    margin: 15px auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    font-weight: bold;
+    background: conic-gradient(#22c55e 0deg, #22c55e 0deg, #334155 0deg);
+    position: relative;
+}
+.circle::after {
+    content: "";
+    position: absolute;
+    width: 105px;
+    height: 105px;
+    background: #0f172a;
+    border-radius: 50%;
+}
+
+/* Stats Grid */
+.stats {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.card {
+    background: rgba(255,255,255,0.07);
+    padding: 10px;
+    border-radius: 10px;
+    text-align: center;
+}
+
+.card span {
+    display: block;
+    font-size: 20px;
+    font-weight: bold;
+}
+
+/* Meaning text */
+.meaning {
+    margin-top: 15px;
+    text-align: center;
+    font-size: 15px;
+    opacity: 0.9;
+}
+
+.footer {
+    text-align: center;
+    margin-top: 15px;
+    font-size: 12px;
+    opacity: 0.6;
+}
+
+.compare-btn{
+    display:flex;
+    justify-content:center;
+    margin-top:20px;
+}
+
+.compare{
+    width:220px;
+    background:#3b82f6;
+}
+
+.compare:hover{
+    background:#2563eb;
+}
+
+
+</style>
+</head>
+
+<body>
+<div class="container">
+
+    <h2>FinNLP Sentiment Analysis</h2>
+
+    <input type="text" id="searchBox" placeholder="Search company or symbol...">
+
+    <select id="companyDropdown">
+        <option>Loading companies...</option>
+    </select>
+
+    <button onclick="analyze()">Analyze Sentiment</button>
+
+    <div id="result"></div>
+
+    <div class="footer">
+        NSE News + Sector News + FinBERT Analysis
+    </div>
+
+    <div class="compare-btn">
+    <a href="compare.html">
+        <button class="compare">Compare Companies</button>
+    </a>
+</div>
+
+</div>
+
+
+ 
+
+
+<script>
+let companies = [];
+
+/* Load companies */
+window.onload = function() {
+    fetch("http://localhost:8080/api/companies")
+        .then(res => res.json())
+        .then(data => {
+            companies = data;
+            populateDropdown(companies);
+        });
+};
+
+function populateDropdown(list) {
+    const dropdown = document.getElementById("companyDropdown");
+    dropdown.innerHTML = "";
+
+    if (list.length === 0) {
+        dropdown.innerHTML = "<option>No companies found</option>";
+        return;
+    }
+
+    list.forEach(c => {
+        const option = document.createElement("option");
+        option.value = c.symbol;
+        option.text = c.name + " (" + c.symbol + ")";
+        dropdown.appendChild(option);
+    });
+}
+
+document.getElementById("searchBox").addEventListener("input", function() {
+    const keyword = this.value.toLowerCase();
+    const filtered = companies.filter(c =>
+        c.name.toLowerCase().includes(keyword) ||
+        c.symbol.toLowerCase().includes(keyword)
+    );
+    populateDropdown(filtered);
+});
+
+/* Analyze */
+function analyze() {
+    const symbol = document.getElementById("companyDropdown").value;
+    const resultDiv = document.getElementById("result");
+
+    resultDiv.innerHTML = "<div class='loader'></div>";
+
+    fetch(`http://localhost:8080/api/sentiment?symbol=${symbol}`)
+        .then(res => res.json())
+        .then(data => showResult(symbol, data))
+        .catch(() => resultDiv.innerHTML = "Error during analysis");
+}
+
+/* Show visual result */
+function showResult(symbol, data) {
+    const resultDiv = document.getElementById("result");
+
+    let score = data.sentiment_score;
+    let percent = Math.round((score + 1) * 50); // convert -1 to 1 scale into 0-100
+
+    let color = "#22c55e";
+    let meaning = "Positive Outlook";
+
+    if (percent < 40) {
+        color = "#ef4444";
+        meaning = "Negative sentiment detected. Market perception is weak.";
+    } 
+    else if (percent < 60) {
+        color = "#facc15";
+        meaning = "Neutral / Stable sentiment. No strong market direction.";
+    } 
+    else {
+        meaning = "Strong positive sentiment. Favorable market outlook.";
+    }
+
+    resultDiv.innerHTML = `
+        <h3 style="text-align:center">${symbol} Sentiment</h3>
+
+        <div class="circle" id="circle">
+            <div style="position:relative; z-index:2;">${percent}%</div>
+        </div>
+
+        <div class="stats">
+            <div class="card">
+                Positive
+                <span style="color:#22c55e">${data.positive}</span>
+            </div>
+            <div class="card">
+                Negative
+                <span style="color:#ef4444">${data.negative}</span>
+            </div>
+            <div class="card">
+                Neutral
+                <span style="color:#facc15">${data.neutral}</span>
+            </div>
+            <div class="card">
+                Total News
+                <span>${data.total_news}</span>
+            </div>
+        </div>
+
+        <div class="meaning">
+            <b>${data.overall_trend}</b><br>
+            ${meaning}
+        </div>
+    `;
+
+    /* Animate circle */
+    const circle = document.getElementById("circle");
+    circle.style.background = `conic-gradient(${color} ${percent * 3.6}deg, #334155 0deg)`;
+}
+</script>
+
+</body>
+</html>

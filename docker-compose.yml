@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  python-service:
+    build:
+      context: .
+      dockerfile: nlp_python/Dockerfile
+    container_name: finbert_service
+    ports:
+      - "5000:5000"
+    networks:
+      - fin_net
+
+  spring-service:
+    build: 
+      context: ./backend-java
+      dockerfile: Dockerfile
+    container_name: spring_backend
+    ports:
+      - "8080:8080"
+    depends_on:
+      - python-service
+    networks:
+      - fin_net
+
+  frontend:
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: finnlp_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - spring-service
+    networks:
+      - fin_net
+
+networks:
+  fin_net:
+    driver: bridge
